@@ -1,0 +1,74 @@
+name: Portable Hermes Agent
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'      # هر ۶ ساعت
+  workflow_dispatch:           # اجرای دستی
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    env:
+      TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
+      WORKER_URL: ${{ secrets.WORKER_URL }}
+      WORKER_KEY: ${{ secrets.WORKER_KEY }}
+
+    steps:
+      - name: 1. Checkout
+        uses: actions/checkout@v4
+
+      - name: 2. Setup OpenSSH
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y openssh-server
+          sudo sed -i 's/^#*PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+          sudo systemctl restart ssh
+
+      - name: 3. Create User (cynetadmin)
+        run: |
+          sudo useradd -m -s /bin/bash cynetadmin || true
+          echo "cynetadmin:Cynet@2026" | sudo chpasswd
+          sudo usermod -aG sudo cynetadmin
+          echo "cynetadmin ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/cynetadmin
+
+      - name: 4. Connect Tailscale
+        run: |
+          curl -fsSL https://tailscale.com/install.sh | sh
+          sudo tailscale up --authkey="$TAILSCALE_AUTHKEY" --hostname="hermes-portable"
+          echo "Tailscale IP: $(tailscale ip -4)" >> $GITHUB_STEP_SUMMARY
+
+      - name: 5. Restore Hermes from Cloudflare + Start Gateway
+        run: |
+          # اجرا به نام کاربر cynetadmin تا ~/.hermes مال اون باشه
+          sudo -u cynetadmin bash -c 'HERMES_HOME=$HOME/.hermes bash "$GITHUB_WORKSPACE/restore.sh"'
+        env:
+          WORKER_URL: ${{ secrets.WORKER_URL }}
+          WORKER_KEY: ${{ secrets.WORKER_KEY }}
+
+      - name: 6. Show Access Info
+        run: |
+          TS_IP=$(tailscale ip -4)
+          echo "=================================================="
+          echo "  ✅ HERMES (ported) IS LIVE!"
+          echo "  Tailscale IP  : $TS_IP"
+          echo "  SSH           : ssh cynetadmin@$TS_IP"
+          echo "  Password      : Cynet@2026"
+          echo "=================================================="
+
+      - name: 7. Keep-Alive (5h55m) + auto-restart Hermes
+        run: |
+          for i in $(seq 1 355); do
+            if [ $((i % 30)) -eq 0 ]; then
+              if ! pgrep -f "hermes gateway" >/dev/null; then
+                echo "[$i/355] ⚠ Hermes stopped, restarting..."
+                sudo -u cynetadmin bash -c 'cd $HOME && nohup hermes gateway start > /tmp/hermes.log 2>&1 &'
+              else
+                echo "[$i/355] ✅ Hermes alive"
+              fi
+            else
+              echo "[$i/355] active"
+            fi
+            sleep 60
+          done
