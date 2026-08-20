@@ -65,7 +65,7 @@ jobs:
               if ! pgrep -f "hermes gateway" >/dev/null; then
                 echo "[$i/355] ⚠ Hermes stopped, restarting..."
                 sudo -u cynetadmin HERMES_HOME=/home/cynetadmin/.hermes \
-                  bash -c 'cd $HOME && nohup hermes gateway start > /tmp/hermes.log 2>&1 &'
+                  bash -c 'cd $HOME && nohup hermes gateway run > /tmp/hermes.log 2>&1 &'
               else
                 echo "[$i/355] ✅ Hermes alive"
               fi

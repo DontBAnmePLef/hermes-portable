@@ -46,8 +46,12 @@ fi
 
 echo "=========== [4/4] استارت گیتوی ==========="
 cd "$(dirname "$HERMES_HOME")"
-nohup hermes gateway start > /tmp/hermes.log 2>&1 &
-sleep 6
+# روی رانر (بدون systemd) سرویس رو نصب می‌کنیم ولی بدون start،
+# چون خودِ گیتوی رو با حالت foreground (run) بالا می‌بریم.
+hermes gateway install --force --no-start-now 2>&1 | tail -3 || true
+# اجرای گیتوی در پس‌زمینه (معادل run، چون start روی رانر کار نمی‌کند)
+nohup hermes gateway run > /tmp/hermes.log 2>&1 &
+sleep 8
 if pgrep -f "hermes gateway" >/dev/null; then
   echo "✅ هرمس دارد اجرا میشود (دقیقاً همون هویت قبلی)"
 else
