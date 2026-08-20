@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # hermes-portable: restore state from Cloudflare Worker (R2) then start gateway
-# متغیرها از secrets گیت‌هاب میاد:
+# متغیرها:
 #   WORKER_URL  - آدرس ورکر
 #   WORKER_KEY  - رمز اشتراکی (x-backup-key)
-#   HOME برابر با خانه کاربر (مثلا /home/cynetadmin)
+#   HERMES_HOME - مقصد (مثلا /home/cynetadmin/.hermes)
+# این اسکریپت با sudo (root) اجرا میشه تا بتونه توی خانه کاربر بنویسه.
 set -e
 
 WORKER_URL="${WORKER_URL:?WORKER_URL secret لازم است}"
@@ -20,8 +21,6 @@ echo "✅ بکاپ دانلود شد: $(du -h "$TMP/hermes-backup.zip" | cut -f1
 
 echo "=========== [2/4] باز کردن در $HERMES_HOME ==========="
 mkdir -p "$HERMES_HOME"
-# بکاپ با hermes backup ساخته شده -> مسیرها نسبت به .hermes هست
-# (فایل درون زیپ در پوشه .hermes/ قرار داره، پس مستقیم باز میشه)
 cd "$HERMES_HOME"
 unzip -o "$TMP/hermes-backup.zip" >/dev/null
 # اگر زیپ درون پوشه .hermes بود، یک سطح بالاتر بیار
@@ -32,6 +31,7 @@ fi
 
 if [ -f "$HERMES_HOME/.env" ]; then
   echo "✅ .env پیدا شد — هویت/توکن تلگرام از بکاپ برمی‌گرده"
+  chmod 600 "$HERMES_HOME/.env"
 else
   echo "⚠️ .env پیدا نشد — باید دستی hermes setup بزنی"
 fi
@@ -45,9 +45,7 @@ else
 fi
 
 echo "=========== [4/4] استارت گیتوی ==========="
-# اطمینان از دسترسی فایل‌ها برای کاربر جاری
-chmod 600 "$HERMES_HOME/.env" 2>/dev/null || true
-cd "$HOME"
+cd "$(dirname "$HERMES_HOME")"
 nohup hermes gateway start > /tmp/hermes.log 2>&1 &
 sleep 6
 if pgrep -f "hermes gateway" >/dev/null; then
@@ -57,3 +55,7 @@ else
   tail -30 /tmp/hermes.log
   exit 1
 fi
+
+echo "=========== [+] تنظیم مالکیت برای cynetadmin ==========="
+chown -R cynetadmin:cynetadmin "$HERMES_HOME" 2>/dev/null || true
+echo "تمام."

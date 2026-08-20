@@ -40,12 +40,13 @@ jobs:
           echo "Tailscale IP: $(tailscale ip -4)" >> $GITHUB_STEP_SUMMARY
 
       - name: 5. Restore Hermes from Cloudflare + Start Gateway
+        # GITHUB_WORKSPACE اینجا توسط شلِ بیرونی باز میشه (قبل از sudo) پس مسیر کامل میشه
+        # با sudo (root) اجرا میشه تا بتونه توی /home/cynetadmin بنویسه
         run: |
-          # اجرا به نام کاربر cynetadmin تا ~/.hermes مال اون باشه
-          sudo -u cynetadmin bash -c 'HERMES_HOME=$HOME/.hermes bash "$GITHUB_WORKSPACE/restore.sh"'
-        env:
-          WORKER_URL: ${{ secrets.WORKER_URL }}
-          WORKER_KEY: ${{ secrets.WORKER_KEY }}
+          sudo HERMES_HOME=/home/cynetadmin/.hermes \
+               WORKER_URL="$WORKER_URL" \
+               WORKER_KEY="$WORKER_KEY" \
+               bash "$GITHUB_WORKSPACE/restore.sh"
 
       - name: 6. Show Access Info
         run: |
@@ -63,7 +64,8 @@ jobs:
             if [ $((i % 30)) -eq 0 ]; then
               if ! pgrep -f "hermes gateway" >/dev/null; then
                 echo "[$i/355] ⚠ Hermes stopped, restarting..."
-                sudo -u cynetadmin bash -c 'cd $HOME && nohup hermes gateway start > /tmp/hermes.log 2>&1 &'
+                sudo -u cynetadmin HERMES_HOME=/home/cynetadmin/.hermes \
+                  bash -c 'cd $HOME && nohup hermes gateway start > /tmp/hermes.log 2>&1 &'
               else
                 echo "[$i/355] ✅ Hermes alive"
               fi
