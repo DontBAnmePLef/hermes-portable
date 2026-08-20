@@ -74,3 +74,11 @@ jobs:
             fi
             sleep 60
           done
+
+      - name: 8. Auto-backup before server dies
+        if: always()
+        run: |
+          sudo HERMES_HOME=/home/cynetadmin/.hermes \
+               WORKER_URL="$WORKER_URL" \
+               WORKER_KEY="$WORKER_KEY" \
+               bash "$GITHUB_WORKSPACE/backup.sh"
